@@ -337,6 +337,7 @@ select.select-sm:focus { outline: none; border-color: var(--accent); }
   background: linear-gradient(to top, rgba(0,0,0,0.55), transparent 40%);
   opacity: 0;
   transition: opacity var(--t-fast);
+  pointer-events: none;
 }
 .card:hover .card-thumb::after { opacity: 1; }
 .card-thumb .badge {
