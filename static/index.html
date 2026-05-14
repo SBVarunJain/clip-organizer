@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clip Organizer</title>
+<link rel="preconnect" href="https://rsms.me/">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- Reusable SVG icon symbols -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 7h4M3 12h4M3 17h4M17 7h4M17 12h4M17 17h4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m20 4-12 8M14.5 12.5 20 20"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-play-outline" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></symbol>
+    <symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
+  </defs>
+</svg>
+
+<!-- Setup screen (shown on first run / when config is missing) -->
+<div id="setup-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop"></div>
+  <div class="modal-body setup-body">
+    <div class="setup-head">
+      <div class="setup-logo"><svg class="icon icon-lg" style="stroke-width:2"><use href="#i-film"/></svg></div>
+      <h2 id="setup-title">Welcome to Clip Organizer</h2>
+      <p id="setup-subtitle" class="setup-sub">Tell us where to find your clips and where to save trimmed ones.</p>
+    </div>
+
+    <div class="setup-content">
+      <div class="field">
+        <label class="field-label" for="setup-clips">Captures folder</label>
+        <div class="setup-hint">The folder your NVIDIA ShadowPlay (or other) clips are organized into game subfolders.</div>
+        <input type="text" id="setup-clips" placeholder="e.g. C:\Users\You\Videos\NVIDIA" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="setup-output">Output folder</label>
+        <div class="setup-hint">Where trimmed, Discord-ready clips will be saved (in matching game subfolders).</div>
+        <input type="text" id="setup-output" placeholder="e.g. C:\Users\You\Videos\NVIDIA\Trimmed Clips" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div id="setup-error" class="setup-error hidden"></div>
+
+      <div class="setup-actions">
+        <button class="ghost-btn" id="setup-cancel" style="display:none">Cancel</button>
+        <button class="primary-btn" id="setup-save">
+          <svg class="icon"><use href="#i-check"/></svg>
+          <span>Save and continue</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="logo"><svg class="icon icon-sm" style="stroke-width:2;color:white"><use href="#i-film"/></svg></span>
+      <span>Clip Organizer</span>
+    </div>
+
+    <div class="sidebar-section">View</div>
+    <div class="segment">
+      <button class="tab active" data-tab="source">Captures</button>
+      <button class="tab" data-tab="outputs">Trimmed</button>
+    </div>
+
+    <div class="sidebar-section">Games</div>
+    <nav id="game-list" class="game-list"></nav>
+
+    <div class="sidebar-foot">
+      <button id="open-output-folder" class="ghost-btn" title="Open output folder in Explorer">
+        <svg class="icon"><use href="#i-folder"/></svg>
+        <span>Output folder</span>
+      </button>
+      <button id="open-settings" class="ghost-btn" title="Change source/output folders">
+        <svg class="icon"><use href="#i-cog"/></svg>
+        <span>Settings</span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-titles">
+        <h1 id="title">Select a game</h1>
+        <div id="subtitle" class="subtitle">No game selected</div>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap">
+          <svg class="icon"><use href="#i-search"/></svg>
+          <input id="search-input" type="text" placeholder="Search clips" autocomplete="off">
+        </div>
+        <select id="sort-select" class="select-sm" title="Sort order">
+          <option value="date-desc">Newest first</option>
+          <option value="date-asc">Oldest first</option>
+          <option value="size-desc">Largest first</option>
+          <option value="size-asc">Smallest first</option>
+          <option value="name-asc">Name A→Z</option>
+        </select>
+        <button id="refresh-btn" class="icon-btn" title="Refresh">
+          <svg class="icon"><use href="#i-refresh"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="grid-wrap">
+      <section id="grid" class="grid"></section>
+    </div>
+  </main>
+</div>
+
+<!-- Trim modal -->
+<div id="trim-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-body">
+    <div class="modal-head">
+      <div class="titles">
+        <div class="label">Editing</div>
+        <div id="trim-title" class="filename"></div>
+      </div>
+      <button class="close-btn" data-close aria-label="Close">
+        <svg class="icon"><use href="#i-x"/></svg>
+      </button>
+    </div>
+
+    <div class="modal-content">
+      <video id="trim-video" controls preload="metadata"></video>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <svg class="icon"><use href="#i-scissors"/></svg>
+            <span>Trim range</span>
+          </div>
+        </div>
+
+        <div class="timeline-track" id="timeline-track">
+          <div class="timeline-range" id="timeline-range"></div>
+          <div class="timeline-handle start" id="handle-start" tabindex="0" title="Start marker"></div>
+          <div class="timeline-handle end" id="handle-end" tabindex="0" title="End marker"></div>
+          <div class="timeline-playhead" id="timeline-playhead"></div>
+        </div>
+
+        <div class="trim-row">
+          <div class="trim-col">
+            <label>Start</label>
+            <input type="text" id="start-input" class="time-input" inputmode="decimal" />
+            <button class="mini" id="set-start" title="Set start to current playback position">
+              <svg class="icon icon-sm"><use href="#i-arrow-right"/></svg>
+              <span>Here</span>
+            </button>
+          </div>
+          <div class="trim-col center">
+            <div class="time-display-label">Duration</div>
+            <div class="time-display" id="trim-duration">0:00</div>
+          </div>
+          <div class="trim-col right">
+            <button class="mini" id="set-end" title="Set end to current playback position">
+              <span>Here</span>
+              <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg>
+            </button>
+            <input type="text" id="end-input" class="time-input" inputmode="decimal" />
+            <label>End</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <svg class="icon"><use href="#i-target"/></svg>
+            <span>Output</span>
+          </div>
+          <div class="estimate-pill" id="bitrate-estimate">
+            <span class="dot"></span>
+            <span>—</span>
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label class="field-label">Target file size</label>
+            <select id="target-size">
+              <option value="9.0" selected>10 MB · Discord free</option>
+              <option value="24">25 MB · Boosted server</option>
+              <option value="49">50 MB · Nitro Basic</option>
+              <option value="490">500 MB · Nitro</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">Audio bitrate</label>
+            <select id="audio-kbps">
+              <option value="96">96 kbps · Compact</option>
+              <option value="128" selected>128 kbps · Recommended</option>
+              <option value="192">192 kbps · High quality</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <label class="inline">
+            <input type="checkbox" id="loop-toggle" checked>
+            <span>Loop preview between markers</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button id="trim-btn" class="primary-btn">
+          <svg class="icon"><use href="#i-scissors"/></svg>
+          <span>Trim &amp; Save</span>
+        </button>
+        <div id="trim-status" class="trim-status"></div>
+      </div>
+      <div id="progress-bar" class="progress-bar hidden"><div></div></div>
+
+      <div id="trim-result" class="trim-result hidden"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
