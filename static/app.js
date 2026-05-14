@@ -310,18 +310,37 @@ async function openTrim(clip) {
   $("#trim-btn").innerHTML = `<svg class="icon"><use href="#i-scissors"/></svg><span>Trim &amp; Save</span>`;
 
   const video = $("#trim-video");
+  // preload="auto" gives smooth scrubbing (browser buffers ahead via Range requests).
+  video.preload = "auto";
   video.src = `/api/video?${params({ game: state.currentGame, file: clip.filename })}`;
+
+  // Whichever source returns a valid duration first wins. tryInit is idempotent.
+  let durationSet = false;
+  const tryInit = (d) => {
+    if (durationSet || !d || !isFinite(d) || d <= 0) return;
+    durationSet = true;
+    initTimeline(d);
+  };
+
+  // If metadata is already loaded (cached video), use it immediately.
+  if (video.readyState >= 1 && video.duration > 0) {
+    tryInit(video.duration);
+  } else {
+    video.addEventListener(
+      "loadedmetadata",
+      () => tryInit(video.duration),
+      { once: true }
+    );
+  }
+
+  // Also fetch via API — usually faster than waiting for the video to parse.
   try {
     const meta = await api(
       "/api/clip-meta?" + params({ game: state.currentGame, file: clip.filename })
     );
-    initTimeline(meta.duration);
+    tryInit(meta.duration);
   } catch (e) {
-    video.addEventListener(
-      "loadedmetadata",
-      () => initTimeline(video.duration),
-      { once: true }
-    );
+    // The loadedmetadata listener above is our fallback.
   }
 }
 
@@ -405,10 +424,19 @@ function setupTimelineDrag() {
   const video = $("#trim-video");
 
   function seekVideo(t) {
-    const clamped = Math.max(0, Math.min(state.trim.duration || 0, t));
-    if (Math.abs(video.currentTime - clamped) > 0.001) {
+    const dur = state.trim.duration || video.duration || 0;
+    if (dur <= 0) return; // not loaded yet
+    const clamped = Math.max(0, Math.min(dur, t));
+    // fastSeek goes to the nearest keyframe without waiting for full decode —
+    // makes scrubbing feel instant. Falls back to currentTime in older browsers.
+    if (typeof video.fastSeek === "function") {
+      video.fastSeek(clamped);
+    } else {
       video.currentTime = clamped;
     }
+    // Move the playhead UI immediately, don't wait for the seeked event.
+    const ph = $("#timeline-playhead");
+    if (ph) ph.style.left = `${(clamped / dur) * 100}%`;
   }
 
   function onPointerMove(e) {

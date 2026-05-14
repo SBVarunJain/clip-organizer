@@ -18,8 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -253,6 +253,56 @@ def _output_path(game: str) -> Path:
     return out_root / game
 
 
+_RANGE_RE = re.compile(r"^bytes=(\d+)-(\d*)$")
+
+
+def _serve_video_range(request: Request, path: Path) -> StreamingResponse | FileResponse:
+    """Serve a video file with HTTP Range support so the browser can seek.
+
+    Starlette's FileResponse didn't honor Range until 0.41; we implement it
+    here so we don't depend on a specific version.
+    """
+    file_size = path.stat().st_size
+    range_header = request.headers.get("range", "")
+    base_headers = {"Accept-Ranges": "bytes"}
+
+    if not range_header:
+        return FileResponse(str(path), media_type="video/mp4", headers=base_headers)
+
+    m = _RANGE_RE.match(range_header.strip())
+    if not m:
+        raise HTTPException(416, "Invalid Range header")
+    start = int(m.group(1))
+    end = int(m.group(2)) if m.group(2) else file_size - 1
+    if end >= file_size:
+        end = file_size - 1
+    if start > end or start >= file_size:
+        return Response(
+            status_code=416,
+            headers={"Content-Range": f"bytes */{file_size}"},
+        )
+    chunk = end - start + 1
+
+    def stream():
+        with open(path, "rb") as f:
+            f.seek(start)
+            remaining = chunk
+            # 256 KiB chunks balance memory and syscall overhead.
+            while remaining > 0:
+                buf = f.read(min(256 * 1024, remaining))
+                if not buf:
+                    break
+                remaining -= len(buf)
+                yield buf
+
+    headers = {
+        **base_headers,
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Content-Length": str(chunk),
+    }
+    return StreamingResponse(stream(), status_code=206, headers=headers, media_type="video/mp4")
+
+
 # --------------------------------------------------------------------------
 # Captures (source clips)
 # --------------------------------------------------------------------------
@@ -308,10 +358,10 @@ def clip_meta(game: str = Query(...), file: str = Query(...)):
 
 
 @app.get("/api/video")
-def serve_video(game: str = Query(...), file: str = Query(...)):
+def serve_video(request: Request, game: str = Query(...), file: str = Query(...)):
     game_dir = _safe_game(game)
     path = _safe_file(game_dir, file)
-    return FileResponse(str(path), media_type="video/mp4")
+    return _serve_video_range(request, path)
 
 
 def _make_thumb(src: Path, thumb: Path) -> None:
@@ -378,7 +428,7 @@ def list_outputs(game: str = Query(...)):
 
 
 @app.get("/api/output-file")
-def serve_output(game: str = Query(...), file: str = Query(...)):
+def serve_output(request: Request, game: str = Query(...), file: str = Query(...)):
     out_dir = _output_path(game)
     if "/" in file or "\\" in file:
         raise HTTPException(400, "Invalid filename")
@@ -389,7 +439,7 @@ def serve_output(game: str = Query(...), file: str = Query(...)):
         raise HTTPException(400, "Invalid path")
     if not p.is_file():
         raise HTTPException(404)
-    return FileResponse(str(p), media_type="video/mp4")
+    return _serve_video_range(request, p)
 
 
 @app.post("/api/reveal")
