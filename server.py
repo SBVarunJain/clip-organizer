@@ -26,6 +26,7 @@ from pydantic import BaseModel
 APP_DIR = Path(__file__).resolve().parent
 THUMBS_DIR = APP_DIR / "thumbnails"
 META_CACHE = APP_DIR / "meta_cache.json"
+STATUS_FILE = APP_DIR / "clip_status.json"
 CONFIG_FILE = APP_DIR / "config.json"
 
 THUMBS_DIR.mkdir(exist_ok=True)
@@ -131,6 +132,30 @@ def _save_cache(cache: dict) -> None:
 
 
 _cache = _load_cache()
+
+_status_lock = threading.Lock()
+
+
+def _load_status() -> dict:
+    if STATUS_FILE.exists():
+        try:
+            return json.loads(STATUS_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_status(data: dict) -> None:
+    tmp = STATUS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data))
+    tmp.replace(STATUS_FILE)
+
+
+_status: dict = _load_status()
+
+
+def _status_key(game: str, filename: str) -> str:
+    return f"{game}|||{filename}"
 
 
 def probe_duration(path: Path) -> float:
@@ -340,11 +365,16 @@ def list_clips(game: str = Query(...)):
         if not f.is_file() or f.suffix.lower() not in VIDEO_EXTS:
             continue
         st = f.stat()
+        key = _status_key(game, f.name)
+        with _status_lock:
+            s = _status.get(key, {})
         clips.append({
             "filename": f.name,
             "size": st.st_size,
             "mtime": st.st_mtime,
             "parsed_date": parse_nvidia_date(f.name),
+            "viewed": s.get("viewed", False),
+            "label": s.get("label", ""),
         })
     clips.sort(key=lambda c: c["mtime"], reverse=True)
     return clips
@@ -619,6 +649,129 @@ def job_status(job_id: str):
         if not j:
             raise HTTPException(404, "Job not found")
         return dict(j)
+
+
+# --------------------------------------------------------------------------
+# Clip status (viewed / label)
+# --------------------------------------------------------------------------
+class SetStatusRequest(BaseModel):
+    game: str
+    file: str
+    viewed: Optional[bool] = None
+    label: Optional[str] = None
+
+
+@app.post("/api/set-status")
+def set_status(req: SetStatusRequest):
+    _safe_game(req.game)
+    key = _status_key(req.game, req.file)
+    with _status_lock:
+        entry = dict(_status.get(key, {}))
+        if req.viewed is not None:
+            entry["viewed"] = req.viewed
+        if req.label is not None:
+            if req.label == "":
+                entry.pop("label", None)
+            else:
+                entry["label"] = req.label
+        _status[key] = entry
+        _save_status(_status)
+    return {"ok": True}
+
+
+# --------------------------------------------------------------------------
+# Archive (move source clips to Archived subfolder within the game folder)
+# --------------------------------------------------------------------------
+class ArchiveRequest(BaseModel):
+    game: str
+    file: str
+
+
+def _safe_archived_file(game: str, filename: str) -> Path:
+    game_dir = _safe_game(game)
+    if "/" in filename or "\\" in filename or filename.startswith(".."):
+        raise HTTPException(400, "Invalid filename")
+    archived_dir = game_dir / "Archived"
+    p = (archived_dir / filename).resolve()
+    try:
+        p.relative_to(archived_dir.resolve())
+    except ValueError:
+        raise HTTPException(400, "Invalid path")
+    if not p.is_file():
+        raise HTTPException(404, "Archived clip not found")
+    return p
+
+
+@app.post("/api/archive")
+def archive_clip(req: ArchiveRequest):
+    game_dir = _safe_game(req.game)
+    src = _safe_file(game_dir, req.file)
+    archived_dir = game_dir / "Archived"
+    archived_dir.mkdir(exist_ok=True)
+    dst = archived_dir / req.file
+    n = 1
+    while dst.exists():
+        stem = Path(req.file).stem
+        suffix = Path(req.file).suffix
+        dst = archived_dir / f"{stem}_{n}{suffix}"
+        n += 1
+    src.rename(dst)
+    return {"ok": True, "archived_name": dst.name}
+
+
+@app.post("/api/unarchive")
+def unarchive_clip(req: ArchiveRequest):
+    src = _safe_archived_file(req.game, req.file)
+    game_dir = _safe_game(req.game)
+    dst = game_dir / req.file
+    n = 1
+    stem = Path(req.file).stem
+    suffix = Path(req.file).suffix
+    while dst.exists():
+        dst = game_dir / f"{stem}_{n}{suffix}"
+        n += 1
+    src.rename(dst)
+    return {"ok": True, "restored_name": dst.name}
+
+
+@app.get("/api/archived")
+def list_archived(game: str = Query(...)):
+    game_dir = _safe_game(game)
+    archived_dir = game_dir / "Archived"
+    if not archived_dir.is_dir():
+        return []
+    items = []
+    for f in archived_dir.iterdir():
+        if not f.is_file() or f.suffix.lower() not in VIDEO_EXTS:
+            continue
+        st = f.stat()
+        key = _status_key(game, f.name)
+        with _status_lock:
+            s = _status.get(key, {})
+        items.append({
+            "filename": f.name,
+            "size": st.st_size,
+            "mtime": st.st_mtime,
+            "parsed_date": parse_nvidia_date(f.name),
+            "viewed": s.get("viewed", False),
+            "label": s.get("label", ""),
+        })
+    items.sort(key=lambda c: c["mtime"], reverse=True)
+    return items
+
+
+@app.get("/api/video-archived")
+def serve_archived_video(request: Request, game: str = Query(...), file: str = Query(...)):
+    path = _safe_archived_file(game, file)
+    return _serve_video_range(request, path)
+
+
+@app.get("/api/thumb-archived")
+def serve_thumb_archived(game: str = Query(...), file: str = Query(...)):
+    path = _safe_archived_file(game, file)
+    thumb = THUMBS_DIR / "archived" / game / (path.stem + ".jpg")
+    _make_thumb(path, thumb)
+    return FileResponse(str(thumb), media_type="image/jpeg")
 
 
 # --------------------------------------------------------------------------

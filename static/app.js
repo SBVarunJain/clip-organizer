@@ -204,7 +204,9 @@ async function loadItems() {
   try {
     const url = state.tab === "source"
       ? "/api/clips?" + params({ game: state.currentGame })
-      : "/api/outputs?" + params({ game: state.currentGame });
+      : state.tab === "outputs"
+      ? "/api/outputs?" + params({ game: state.currentGame })
+      : "/api/archived?" + params({ game: state.currentGame });
     state.items = await api(url);
   } catch (e) {
     state.items = [];
@@ -237,9 +239,10 @@ function renderGrid() {
   const total = state.items.length;
   const shown = items.length;
 
-  let sub = state.tab === "source"
-    ? `${total} ${total === 1 ? "capture" : "captures"}`
-    : `${total} trimmed ${total === 1 ? "clip" : "clips"}`;
+  let sub;
+  if (state.tab === "source") sub = `${total} ${total === 1 ? "capture" : "captures"}`;
+  else if (state.tab === "outputs") sub = `${total} trimmed ${total === 1 ? "clip" : "clips"}`;
+  else sub = `${total} archived ${total === 1 ? "clip" : "clips"}`;
   if (shown !== total) sub = `${shown} of ${sub}`;
   $("#subtitle").textContent = sub;
 
@@ -248,6 +251,8 @@ function renderGrid() {
       grid.innerHTML = `<div class="empty">No clips match "<strong>${escapeHtml(state.search)}</strong>".<div class="hint">Try a shorter search term.</div></div>`;
     } else if (state.tab === "outputs") {
       grid.innerHTML = `<div class="empty">No trimmed clips for ${escapeHtml(state.currentGame)} yet.<div class="hint">Open a capture and trim it to populate this view.</div></div>`;
+    } else if (state.tab === "archived") {
+      grid.innerHTML = `<div class="empty">No archived clips for ${escapeHtml(state.currentGame)} yet.<div class="hint">Hover a capture card and click the archive icon to move it here.</div></div>`;
     } else {
       grid.innerHTML = '<div class="empty">No clips in this folder.</div>';
     }
@@ -259,22 +264,48 @@ function renderGrid() {
     const card = document.createElement("div");
     card.className = "card";
     const isOutput = state.tab === "outputs";
+    const isArchived = state.tab === "archived";
+
     const thumbUrl = isOutput
       ? `/api/thumb-output?${params({ game: state.currentGame, file: c.filename })}`
+      : isArchived
+      ? `/api/thumb-archived?${params({ game: state.currentGame, file: c.filename })}`
       : `/api/thumb?${params({ game: state.currentGame, file: c.filename })}`;
+
     const dateStr = c.parsed_date
       ? fmtDate(c.parsed_date)
       : fmtDate(new Date(c.mtime * 1000).toISOString());
-    const badge = isOutput
-      ? '<div class="badge green">Trimmed</div>'
+
+    const mainBadge = isOutput ? '<div class="badge green">Trimmed</div>' : '';
+    const viewedBadge = !isOutput && c.viewed
+      ? '<div class="badge badge-tl viewed-badge">Viewed</div>'
       : '';
-    const hover = isOutput
+    const hover = isOutput || isArchived
       ? `<div class="hover-action"><svg class="icon icon-sm"><use href="#i-play-outline"/></svg>Play</div>`
       : `<div class="hover-action"><svg class="icon icon-sm"><use href="#i-scissors"/></svg>Trim</div>`;
+
+    let overlayActions = '';
+    if (!isOutput) {
+      const archiveBtn = isArchived
+        ? `<button class="card-act-btn" data-action="unarchive" title="Restore to Captures"><svg class="icon icon-sm"><use href="#i-restore"/></svg></button>`
+        : `<button class="card-act-btn" data-action="archive" title="Move to Archived"><svg class="icon icon-sm"><use href="#i-archive"/></svg></button>`;
+      overlayActions = `<div class="card-overlay-actions">
+        <button class="card-act-btn${c.viewed ? ' on' : ''}" data-action="viewed" title="${c.viewed ? 'Unmark viewed' : 'Mark as viewed'}"><svg class="icon icon-sm"><use href="#i-eye"/></svg></button>
+        ${archiveBtn}
+        <button class="card-act-btn${c.label ? ' on' : ''}" data-action="label" title="${c.label ? 'Edit label' : 'Add label'}"><svg class="icon icon-sm"><use href="#i-tag"/></svg></button>
+      </div>`;
+    }
+
+    const labelRow = c.label
+      ? `<div class="card-labels"><span class="label-pill">${escapeHtml(c.label)}</span></div>`
+      : '';
+
     card.innerHTML = `
       <div class="card-thumb" style="background-image:url('${thumbUrl}')">
-        ${badge}
+        ${viewedBadge}
+        ${mainBadge}
         ${hover}
+        ${overlayActions}
       </div>
       <div class="card-meta">
         <div class="card-name" title="${escapeHtml(c.filename)}">${escapeHtml(c.filename)}</div>
@@ -282,9 +313,22 @@ function renderGrid() {
           <span>${dateStr}</span>
           <span>${fmtSize(c.size)}</span>
         </div>
+        ${labelRow}
       </div>`;
-    card.addEventListener("click", () => {
+
+    card.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (btn) {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        if (action === "viewed") toggleViewed(state.currentGame, c.filename, c.viewed);
+        else if (action === "archive") archiveClip(state.currentGame, c.filename);
+        else if (action === "unarchive") unarchiveClip(state.currentGame, c.filename);
+        else if (action === "label") editLabel(state.currentGame, c.filename, c.label);
+        return;
+      }
       if (isOutput) openOutput(c.filename);
+      else if (isArchived) openArchivedVideo(c.filename);
       else openTrim(c);
     });
     grid.appendChild(card);
@@ -294,6 +338,77 @@ function renderGrid() {
 function openOutput(filename) {
   const url = `/api/output-file?${params({ game: state.currentGame, file: filename })}`;
   window.open(url, "_blank");
+}
+
+function openArchivedVideo(filename) {
+  const url = `/api/video-archived?${params({ game: state.currentGame, file: filename })}`;
+  window.open(url, "_blank");
+}
+
+async function toggleViewed(game, filename, currentViewed) {
+  const item = state.items.find((i) => i.filename === filename);
+  if (item) item.viewed = !currentViewed;
+  renderGrid();
+  try {
+    await api("/api/set-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game, file: filename, viewed: !currentViewed }),
+    });
+  } catch (e) {
+    if (item) item.viewed = currentViewed;
+    renderGrid();
+  }
+}
+
+async function archiveClip(game, filename) {
+  try {
+    await api("/api/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game, file: filename }),
+    });
+    state.items = state.items.filter((i) => i.filename !== filename);
+    renderGrid();
+  } catch (e) {
+    alert("Archive failed: " + e.message);
+  }
+}
+
+async function unarchiveClip(game, filename) {
+  try {
+    await api("/api/unarchive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game, file: filename }),
+    });
+    state.items = state.items.filter((i) => i.filename !== filename);
+    renderGrid();
+  } catch (e) {
+    alert("Restore failed: " + e.message);
+  }
+}
+
+async function editLabel(game, filename, currentLabel) {
+  const newLabel = prompt(
+    `Label for "${filename}" (leave empty to remove):`,
+    currentLabel || ""
+  );
+  if (newLabel === null) return;
+  const trimmed = newLabel.trim();
+  const item = state.items.find((i) => i.filename === filename);
+  if (item) item.label = trimmed;
+  renderGrid();
+  try {
+    await api("/api/set-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game, file: filename, label: trimmed }),
+    });
+  } catch (e) {
+    if (item) item.label = currentLabel;
+    renderGrid();
+  }
 }
 
 // ----- Trim modal -----

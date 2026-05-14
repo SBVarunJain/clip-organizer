@@ -355,6 +355,16 @@ select.select-sm:focus { outline: none; border-color: var(--accent); }
   background: rgba(74, 222, 128, 0.85);
   color: #0a0d13;
 }
+.card-thumb .badge.badge-tl {
+  bottom: auto;
+  top: 8px;
+  left: 8px;
+  right: auto;
+}
+.card-thumb .badge.viewed-badge {
+  background: rgba(74, 222, 128, 0.85);
+  color: #0a0d13;
+}
 .card-thumb .hover-action {
   position: absolute;
   bottom: 8px;
@@ -373,6 +383,47 @@ select.select-sm:focus { outline: none; border-color: var(--accent); }
   opacity: 1;
   transform: translateY(0);
 }
+
+/* ---- Card overlay action buttons (eye / archive / tag) ---- */
+.card-overlay-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+  z-index: 3;
+}
+.card:hover .card-overlay-actions,
+.card:focus-within .card-overlay-actions {
+  opacity: 1;
+}
+.card-act-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 8, 14, 0.72);
+  border-radius: 4px;
+  color: var(--text-1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(4px);
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  flex-shrink: 0;
+}
+.card-act-btn:hover {
+  background: rgba(5, 8, 14, 0.92);
+  color: var(--text-0);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.card-act-btn.on {
+  background: rgba(110, 168, 254, 0.65);
+  color: white;
+  border-color: rgba(110, 168, 254, 0.5);
+}
+.card-act-btn.on:hover { background: var(--accent); }
+
 .card-meta {
   padding: 10px 12px 12px;
 }
@@ -391,6 +442,26 @@ select.select-sm:focus { outline: none; border-color: var(--accent); }
   display: flex;
   justify-content: space-between;
   font-variant-numeric: tabular-nums;
+}
+.card-labels {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.label-pill {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 500;
+  background: rgba(110, 168, 254, 0.15);
+  border: 1px solid rgba(110, 168, 254, 0.25);
+  color: var(--accent);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- Modal ---- */
